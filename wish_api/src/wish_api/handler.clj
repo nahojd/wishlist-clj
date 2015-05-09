@@ -5,7 +5,18 @@
 		[compojure.route :as route]
 		[compojure.handler :as handler]
 		[ring.middleware.defaults :refer :all]
-		[ring.middleware.json :as middleware]))
+		[ring.middleware.json :as middleware]
+		[datomic.api :as d]
+		[wish-api.db :as db]))
+
+(defn get-all-users []
+	(response (db/q '[:find ?name ?email
+					  :where 
+					  [?u :user/name ?name]
+					  [?u :user/email ?email]])))
+
+(defn get-user [userid]
+	(response {:name userid :email "test@example.com"}))
 
 (defn get-all-wishes [userid]
 	(response []))
@@ -17,9 +28,9 @@
 	(response {:title "Lorem ipsum" :description "Lorem ipsum dolor sit amet." :url "http://example.com" :userid "johndoe"}))
 
 (defroutes app-routes
-	(GET "/" [] (response {:hello "world"}))
-
+	(GET "/" [] (get-all-users))
 	(context "/:userid" [userid] (defroutes user-routes
+		(GET 	"/" [] (get-user userid))
 		(context "/wishes" [] (defroutes wishes-routes
 			(GET	"/" [] (get-all-wishes userid))
 			(POST	"/" {body :body} (create-new-wish userid body))
