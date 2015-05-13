@@ -6,17 +6,31 @@
 		[compojure.handler :as handler]
 		[ring.middleware.defaults :refer :all]
 		[ring.middleware.json :as middleware]
-		[datomic.api :as d]
-		[wish-api.db :as db]))
+		[wish-api.queries :as queries]
+		[wish-api.commands :as cmd]))
+
+(defn status-response [code body]
+  {:status code
+   :headers {"Content-Type" "text/plain"}
+   :body body})
 
 (defn get-all-users []
-	(response (db/q '[:find ?name ?email
-					  :where 
-					  [?u :user/name ?name]
-					  [?u :user/email ?email]])))
+	(response (queries/all-users)))
 
-(defn get-user [userid]
-	(response {:name userid :email "test@example.com"}))
+(defn get-user [userid] 
+	(let [user (queries/get-user userid)] 
+			(if (nil? user) 
+				(ring.util.response/not-found (str "User '" userid "' not found."))
+				(response user))))
+
+(defn create-new-user [user]
+	(let [userid (user "name")]
+		(let [existing-user (queries/get-user userid)]
+			(if (nil? existing-user)
+				((cmd/create-user userid (user "email"))
+					(response (queries/get-user userid)))
+				(status-response 409 "User already exists.")))))
+	
 
 (defn get-all-wishes [userid]
 	(response []))
@@ -27,16 +41,23 @@
 (defn get-wish [wishid]
 	(response {:title "Lorem ipsum" :description "Lorem ipsum dolor sit amet." :url "http://example.com" :userid "johndoe"}))
 
-(defroutes app-routes
-	(GET "/" [] (get-all-users))
-	(context "/:userid" [userid] (defroutes user-routes
-		(GET 	"/" [] (get-user userid))
-		(context "/wishes" [] (defroutes wishes-routes
-			(GET	"/" [] (get-all-wishes userid))
-			(POST	"/" {body :body} (create-new-wish userid body))
-			(context "/:wishid" [wishid] (defroutes wish-routes
-				(GET 	"/" [] (get-wish wishid))))))))
+(defn aptest [apa]
+	(println apa)
+	(response apa))
 
+(defroutes app-routes
+	(POST "/test" {body :body} (aptest body))
+	(context "/users" [] (defroutes users-routes
+		(GET "/" [] (get-all-users))
+		(POST "/" {body :body} (create-new-user body))
+		(context "/:userid" [userid] (defroutes user-routes
+			(GET 	"/" [] (get-user userid))
+			(context "/wishes" [] (defroutes wishes-routes
+				(GET	"/" [] (get-all-wishes userid))
+				(POST	"/" {body :body} (create-new-wish userid body))
+				(context "/:wishid" [wishid] (defroutes wish-routes
+					(GET 	"/" [] (get-wish wishid))))))))))
+	
 	(route/not-found "Not Found"))
 
 (def app
